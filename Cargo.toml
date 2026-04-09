@@ -1,0 +1,18 @@
+[package]
+name = "actix-admin"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-web = "4"
+actix-session = { version = "0.9", features = ["cookie-session"] }
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tera = "1"
+tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies]
+actix-web = { version = "4", features = ["macros"] }
+actix-http = "3"
+uuid = { version = "1", features = ["v4"] }
