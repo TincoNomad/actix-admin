@@ -1,3 +1,34 @@
+//! # actix-admin
+//! 
+//! A powerful admin panel library for Actix-web 4 applications that automatically generates CRUD interfaces.
+//! 
+//! ## Quick Start
+//! 
+//! ```rust,no_run
+//! use actix_admin::{AdminRegistry, AdminSite, AdminResource, init_templates};
+//! use async_trait::async_trait;
+//! use std::collections::HashMap;
+//! use std::sync::{Arc, Mutex};
+//! 
+//! #[actix_web::main]
+//! async fn main() -> std::io::Result<()> {
+//!     let templates = init_templates();
+//!     let mut registry = AdminRegistry::new();
+//!     // Register your resources...
+//!     
+//!     HttpServer::new(move || {
+//!         App::new()
+//!             .app_data(web::Data::new(templates.clone()))
+//!             .configure(|cfg| {
+//!                 AdminSite::new("/admin").mount(cfg, registry)
+//!             })
+//!     })
+//!     .bind(("127.0.0.1", 8080))?
+//!     .run()
+//!     .await
+//! }
+//! ```
+
 pub mod resource;
 pub mod registry;
 pub mod site;

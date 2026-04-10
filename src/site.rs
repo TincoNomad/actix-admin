@@ -1,7 +1,7 @@
 use crate::handlers;
 use crate::registry::{AdminRegistry, SharedRegistry};
 use crate::resource::{AdminPrefix, AdminTitle};
-use actix_web::{web, HttpResponse, Responder};
+use actix_web::web;
 use std::sync::Arc;
 
 /// Main entry point for configuring the admin site.

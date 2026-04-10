@@ -5,16 +5,18 @@ use tera::{Context, Tera};
 use crate::registry::SharedRegistry;
 use crate::types::*;
 use crate::resource::{AdminTitle, AdminPrefix};
+use log::{info, error, warn};
 
 fn get_context(
     session: &Session,
     title: &AdminTitle,
-    resource: &dyn crate::resource::AdminResource,
+    _resource: &dyn crate::resource::AdminResource,
     slug: &str,
 ) -> Context {
     let mut ctx = Context::new();
     ctx.insert("title", &title.0);
-    ctx.insert("user", &session.get::<String>("admin_user").unwrap().unwrap());
+    let user = session.get::<String>("admin_user").ok().flatten().unwrap_or_else(|| "Guest".to_string());
+    ctx.insert("user", &user);
     ctx.insert("path_dashboard", "/admin/"); 
     ctx.insert("path_logout", "/admin/logout"); 
     ctx.insert("current_slug", slug);
@@ -31,18 +33,39 @@ pub async fn list(
     query: web::Query<ListQuery>,
 ) -> impl Responder {
     let slug = path.into_inner();
-    if session.get::<String>("admin_user").unwrap().is_none() {
-        return HttpResponse::Found().insert_header(("Location", format!("/{}/login", prefix.0))).finish();
-    }
+    info!("Accessing list for slug: {}", slug);
+    
+    let user = match session.get::<String>("admin_user") {
+        Ok(Some(u)) => {
+            info!("User authenticated: {}", u);
+            u
+        },
+        _ => {
+            warn!("User not authenticated, redirecting to login");
+            return HttpResponse::Found().insert_header(("Location", format!("/{}/login", prefix.0))).finish();
+        }
+    };
 
     let resource = match registry.get(&slug) {
-        Some(r) => r,
-        None => return HttpResponse::NotFound().finish(),
+        Some(r) => {
+            info!("Resource found: {}", r.name());
+            r
+        },
+        None => {
+            error!("Resource not found for slug: {}", slug);
+            return HttpResponse::NotFound().finish();
+        }
     };
 
     let result = match resource.list(query.into_inner()).await {
-        Ok(res) => res,
-        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+        Ok(res) => {
+            info!("List query successful, {} items", res.rows.len());
+            res
+        },
+        Err(e) => {
+            error!("List query failed: {}", e);
+            return HttpResponse::InternalServerError().body(e.to_string());
+        }
     };
 
     let mut ctx = get_context(&session, &title, &*resource, &slug);
@@ -57,12 +80,19 @@ pub async fn list(
     
     ctx.insert("path_dashboard", &format!("/{}/", prefix.0));
     ctx.insert("path_logout", &format!("/{}/logout", prefix.0));
+    ctx.insert("user", &user);
     
     ctx.insert("resources", &registry.all().iter().map(|r| r.info(&prefix.0)).collect::<Vec<_>>());
 
     match tmpl.render("list.html", &ctx) {
-        Ok(rendered) => HttpResponse::Ok().content_type("text/html").body(rendered),
-        Err(_) => HttpResponse::InternalServerError().finish(),
+        Ok(rendered) => {
+            info!("Template rendered successfully for list page");
+            HttpResponse::Ok().content_type("text/html").body(rendered)
+        },
+        Err(e) => {
+            error!("Template rendering failed: {}", e);
+            HttpResponse::InternalServerError().finish()
+        },
     }
 }
 
@@ -75,9 +105,10 @@ pub async fn new(
     path: web::Path<String>,
 ) -> impl Responder {
     let slug = path.into_inner();
-    if session.get::<String>("admin_user").unwrap().is_none() {
-        return HttpResponse::Found().insert_header(("Location", format!("/{}/login", prefix.0))).finish();
-    }
+    let user = match session.get::<String>("admin_user") {
+        Ok(Some(u)) => u,
+        _ => return HttpResponse::Found().insert_header(("Location", format!("/{}/login", prefix.0))).finish(),
+    };
 
     let resource = match registry.get(&slug) {
         Some(r) => r,
@@ -94,6 +125,7 @@ pub async fn new(
     ctx.insert("resources", &registry.all().iter().map(|r| r.info(&prefix.0)).collect::<Vec<_>>());
     ctx.insert("path_dashboard", &format!("/{}/", prefix.0));
     ctx.insert("path_logout", &format!("/{}/logout", prefix.0));
+    ctx.insert("user", &user);
 
     match tmpl.render("form.html", &ctx) {
         Ok(rendered) => HttpResponse::Ok().content_type("text/html").body(rendered),
@@ -111,9 +143,10 @@ pub async fn create(
     form: web::Form<HashMap<String, String>>,
 ) -> impl Responder {
     let slug = path.into_inner();
-    if session.get::<String>("admin_user").unwrap().is_none() {
-        return HttpResponse::Found().insert_header(("Location", format!("/{}/login", prefix.0))).finish();
-    }
+    let user = match session.get::<String>("admin_user") {
+        Ok(Some(u)) => u,
+        _ => return HttpResponse::Found().insert_header(("Location", format!("/{}/login", prefix.0))).finish(),
+    };
 
     let resource = match registry.get(&slug) {
         Some(r) => r,
@@ -143,6 +176,7 @@ pub async fn create(
             ctx.insert("resources", &registry.all().iter().map(|r| r.info(&prefix.0)).collect::<Vec<_>>());
             ctx.insert("path_dashboard", &format!("/{}/", prefix.0));
             ctx.insert("path_logout", &format!("/{}/logout", prefix.0));
+            ctx.insert("user", &user);
             
             match tmpl.render("form.html", &ctx) {
                 Ok(rendered) => HttpResponse::BadRequest().content_type("text/html").body(rendered),
@@ -161,9 +195,10 @@ pub async fn edit(
     path: web::Path<(String, String)>,
 ) -> impl Responder {
     let (slug, id) = path.into_inner();
-    if session.get::<String>("admin_user").unwrap().is_none() {
-        return HttpResponse::Found().insert_header(("Location", format!("/{}/login", prefix.0))).finish();
-    }
+    let user = match session.get::<String>("admin_user") {
+        Ok(Some(u)) => u,
+        _ => return HttpResponse::Found().insert_header(("Location", format!("/{}/login", prefix.0))).finish(),
+    };
 
     let resource = match registry.get(&slug) {
         Some(r) => r,
@@ -193,6 +228,7 @@ pub async fn edit(
     ctx.insert("resources", &registry.all().iter().map(|r| r.info(&prefix.0)).collect::<Vec<_>>());
     ctx.insert("path_dashboard", &format!("/{}/", prefix.0));
     ctx.insert("path_logout", &format!("/{}/logout", prefix.0));
+    ctx.insert("user", &user);
 
     match tmpl.render("form.html", &ctx) {
         Ok(rendered) => HttpResponse::Ok().content_type("text/html").body(rendered),
@@ -210,9 +246,10 @@ pub async fn update(
     form: web::Form<HashMap<String, String>>,
 ) -> impl Responder {
     let (slug, id) = path.into_inner();
-    if session.get::<String>("admin_user").unwrap().is_none() {
-        return HttpResponse::Found().insert_header(("Location", format!("/{}/login", prefix.0))).finish();
-    }
+    let user = match session.get::<String>("admin_user") {
+        Ok(Some(u)) => u,
+        _ => return HttpResponse::Found().insert_header(("Location", format!("/{}/login", prefix.0))).finish(),
+    };
 
     let resource = match registry.get(&slug) {
         Some(r) => r,
@@ -242,6 +279,7 @@ pub async fn update(
             ctx.insert("resources", &registry.all().iter().map(|r| r.info(&prefix.0)).collect::<Vec<_>>());
             ctx.insert("path_dashboard", &format!("/{}/", prefix.0));
             ctx.insert("path_logout", &format!("/{}/logout", prefix.0));
+            ctx.insert("user", &user);
             
             match tmpl.render("form.html", &ctx) {
                 Ok(rendered) => HttpResponse::BadRequest().content_type("text/html").body(rendered),
@@ -258,9 +296,10 @@ pub async fn delete(
     path: web::Path<(String, String)>,
 ) -> impl Responder {
     let (slug, id) = path.into_inner();
-    if session.get::<String>("admin_user").unwrap().is_none() {
-        return HttpResponse::Found().insert_header(("Location", format!("/{}/login", prefix.0))).finish();
-    }
+    let _user = match session.get::<String>("admin_user") {
+        Ok(Some(u)) => u,
+        _ => return HttpResponse::Found().insert_header(("Location", format!("/{}/login", prefix.0))).finish(),
+    };
 
     let resource = match registry.get(&slug) {
         Some(r) => r,

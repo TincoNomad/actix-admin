@@ -1,18 +1,41 @@
-use actix_web::{web, App, HttpServer};
-use actix_session::storage::CookieSessionStore;
-use actix_session::SessionMiddleware;
+# actix-admin
+
+A powerful admin panel library for Actix-web 4 applications that automatically generates CRUD interfaces.
+
+## Features
+
+- 🚀 **Auto-generated CRUD operations** - Create, Read, Update, Delete interfaces
+- 🔐 **Built-in authentication** - Simple session-based auth
+- 🎨 **Modern responsive UI** - Clean, professional admin interface
+- 🔍 **Search & pagination** - Built-in search and paginated lists
+- 📝 **Form validation** - Automatic form generation with validation
+- 🎯 **Type-safe** - Full Rust type safety with async trait support
+- 📦 **Easy integration** - Just implement one trait and you're done
+
+## Quick Start
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+actix-admin = "0.1.0"
+actix-web = "4"
+actix-session = { version = "0.9", features = ["cookie-session"] }
+tokio = { version = "1", features = ["full"] }
+```
+
+### Basic Example
+
+```rust
 use actix_admin::{AdminRegistry, AdminSite, AdminResource, init_templates};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use actix_admin::types::*;
 
 struct Product {
     id: String,
     name: String,
     price: f64,
-    active: bool,
-    category: String,
 }
 
 struct ProductAdmin {
@@ -30,8 +53,6 @@ impl AdminResource for ProductAdmin {
         vec![
             Column::text("name", "Name"),
             Column::number("price", "Price"),
-            Column::boolean("active", "Active"),
-            Column::text("category", "Category"),
         ]
     }
 
@@ -39,48 +60,25 @@ impl AdminResource for ProductAdmin {
         vec![
             FormField::text("name", "Name").required(),
             FormField::number("price", "Price").required(),
-            FormField::boolean("active", "Active"),
-            FormField::select("category", "Category", vec![
-                ("electronics", "Electronics"),
-                ("clothing", "Clothing"),
-                ("food", "Food"),
-            ]).required(),
         ]
     }
 
     async fn list(&self, query: ListQuery) -> Result<ListResult, AdminError> {
         let db = self.db.lock().unwrap();
-        let mut rows: Vec<serde_json::Value> = db.iter().map(|p| {
+        let rows: Vec<serde_json::Value> = db.iter().map(|p| {
             serde_json::json!({
                 "id": p.id,
                 "name": p.name,
                 "price": p.price,
-                "active": p.active,
-                "category": p.category,
             })
         }).collect();
-
-        if let Some(ref s) = query.search {
-            let s = s.to_lowercase();
-            rows.retain(|r| {
-                r["name"].as_str().map(|n| n.to_lowercase().contains(&s)).unwrap_or(false) ||
-                r["category"].as_str().map(|c| c.to_lowercase().contains(&s)).unwrap_or(false)
-            });
-        }
-
-        let total = rows.len() as u64;
-        let per_page = query.per_page.unwrap_or(10);
-        let page = query.page.unwrap_or(1);
-        let start = ((page - 1) * per_page) as usize;
         
-        let rows = if start < rows.len() {
-            let end = (start + per_page as usize).min(rows.len());
-            rows[start..end].to_vec()
-        } else {
-            vec![]
-        };
-
-        Ok(ListResult { rows, total, page, per_page })
+        Ok(ListResult { 
+            rows, 
+            total: rows.len() as u64, 
+            page: query.page.unwrap_or(1), 
+            per_page: query.per_page.unwrap_or(10) 
+        })
     }
 
     async fn get(&self, id: &str) -> Result<serde_json::Value, AdminError> {
@@ -91,8 +89,6 @@ impl AdminResource for ProductAdmin {
                 "id": p.id,
                 "name": p.name,
                 "price": p.price,
-                "active": p.active,
-                "category": p.category,
             }))
             .ok_or(AdminError::NotFound)
     }
@@ -104,8 +100,6 @@ impl AdminResource for ProductAdmin {
             id: id.clone(),
             name: data.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
             price: data.get("price").and_then(|v| v.as_str()).and_then(|s| s.parse().ok()).unwrap_or(0.0),
-            active: data.get("active").and_then(|v| v.as_bool()).unwrap_or(true),
-            category: data.get("category").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         };
         db.push(p);
         Ok(serde_json::json!({ "id": id }))
@@ -116,8 +110,6 @@ impl AdminResource for ProductAdmin {
         if let Some(p) = db.iter_mut().find(|p| p.id == id) {
             if let Some(v) = data.get("name").and_then(|v| v.as_str()) { p.name = v.to_string(); }
             if let Some(v) = data.get("price").and_then(|v| v.as_str()).and_then(|s| s.parse().ok()) { p.price = v; }
-            if let Some(v) = data.get("active").and_then(|v| v.as_bool()) { p.active = v; }
-            if let Some(v) = data.get("category").and_then(|v| v.as_str()) { p.category = v.to_string(); }
             return Ok(serde_json::json!({ "id": id }));
         }
         Err(AdminError::NotFound)
@@ -133,21 +125,11 @@ impl AdminResource for ProductAdmin {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // Initialize logging
-    env_logger::init();
-    
     let templates = init_templates();
     let mut registry = AdminRegistry::new();
     registry.register(ProductAdmin {
-        db: Arc::new(Mutex::new(vec![
-            Product { id: "1".to_string(), name: "Laptop".to_string(), price: 999.99, active: true, category: "electronics".to_string() },
-            Product { id: "2".to_string(), name: "T-Shirt".to_string(), price: 19.99, active: true, category: "clothing".to_string() },
-        ])),
+        db: Arc::new(Mutex::new(vec![])),
     });
-
-    let _admin_site = AdminSite::new("/admin").title("My Store Admin");
-    
-    let secret_key = actix_web::cookie::Key::from(b"a_very_long_secret_key_that_is_exactly_64_bytes_long_123456789012");
 
     HttpServer::new(move || {
         App::new()
@@ -156,19 +138,89 @@ async fn main() -> std::io::Result<()> {
                 username: "admin".to_string(),
                 password: "admin".to_string(),
             }))
-            .wrap(SessionMiddleware::new(CookieSessionStore::default(), secret_key.clone()))
+            .wrap(SessionMiddleware::new(
+                CookieSessionStore::default(), 
+                actix_web::cookie::Key::generate()
+            ))
             .configure(|cfg| {
-                let mut reg = AdminRegistry::new();
-                reg.register(ProductAdmin {
-                    db: Arc::new(Mutex::new(vec![
-                        Product { id: "1".to_string(), name: "Laptop".to_string(), price: 999.99, active: true, category: "electronics".to_string() },
-                        Product { id: "2".to_string(), name: "T-Shirt".to_string(), price: 19.99, active: true, category: "clothing".to_string() },
-                    ])),
-                });
-                AdminSite::new("/admin").title("My Store Admin").mount(cfg, reg)
+                AdminSite::new("/admin").title("My Admin").mount(cfg, registry)
             })
     })
     .bind(("127.0.0.1", 8080))?
     .run()
     .await
 }
+```
+
+Run the example and visit `http://localhost:8080/admin` - login with `admin`/`admin`.
+
+## Configuration
+
+### AdminSite
+
+```rust
+AdminSite::new("/admin")  // URL prefix
+    .title("My Admin Panel")  // Site title
+    .mount(cfg, registry)     // Mount to Actix app
+```
+
+### Resources
+
+Each resource must implement the `AdminResource` trait:
+
+- `name()` - Singular display name
+- `plural_name()` - Plural display name  
+- `slug()` - URL slug (must be unique)
+- `icon()` - Emoji icon for dashboard
+- `list_columns()` - Columns for list view
+- `form_fields()` - Fields for create/edit forms
+- CRUD operations: `list()`, `get()`, `create()`, `update()`, `delete()`
+
+### Field Types
+
+```rust
+FormField::text("name", "Name").required()
+FormField::number("price", "Price")
+FormField::boolean("active", "Active")
+FormField::select("category", "Category", vec![
+    ("electronics", "Electronics"),
+    ("clothing", "Clothing"),
+])
+FormField::textarea("description", "Description")
+```
+
+### Column Types
+
+```rust
+Column::text("name", "Name")
+Column::number("price", "Price")
+Column::boolean("active", "Active")
+Column::date("created_at", "Created")
+```
+
+## Authentication
+
+Built-in simple authentication:
+
+```rust
+app_data(web::Data::new(actix_admin::handlers::auth::SimpleAuth {
+    username: "admin".to_string(),
+    password: "admin".to_string(),
+}))
+```
+
+## Routes
+
+```
+/admin/                    # Dashboard
+/admin/login              # Login page
+/admin/logout             # Logout
+/admin/{slug}/            # List view
+/admin/{slug}/new         # Create form
+/admin/{slug}/{id}        # Edit form
+/admin/{slug}/{id}/delete # Delete action
+```
+
+## License
+
+AGPL-3.0 - See [LICENSE](LICENSE) file for details.

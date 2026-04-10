@@ -2,6 +2,15 @@
 name = "actix-admin"
 version = "0.1.0"
 edition = "2021"
+description = "A powerful admin panel library for Actix-web 4 applications"
+license = "AGPL-3.0"
+repository = "https://github.com/yourusername/actix-admin"
+homepage = "https://github.com/yourusername/actix-admin"
+documentation = "https://docs.rs/actix-admin"
+readme = "README.md"
+keywords = ["actix", "admin", "crud", "web", "panel"]
+categories = ["web-programming", "web-programming::http-server"]
+authors = ["Your Name <your.email@example.com>"]
 
 [dependencies]
 actix-web = "4"
@@ -11,6 +20,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tera = "1"
 tokio = { version = "1", features = ["full"] }
+log = "0.4"
+env_logger = "0.10"
 
 [dev-dependencies]
 actix-web = { version = "4", features = ["macros"] }

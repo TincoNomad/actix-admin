@@ -12,7 +12,7 @@ pub struct AdminTitle(pub String);
 pub struct AdminPrefix(pub String);
 
 /// Information about a resource for serialization (e.g. for Tera templates).
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct ResourceInfo {
     pub name: String,
     pub plural_name: String,
@@ -72,8 +72,8 @@ pub trait AdminResource: Send + Sync + 'static {
             icon: self.icon().to_string(),
             path_list: format!("{}/{}/", prefix, self.slug()),
             path_new: format!("{}/{}/new", prefix, self.slug()),
-            path_edit: format!("{}/{}/", prefix, self.slug()),
-            path_delete: format!("{}/{}/", prefix, self.slug()),
+            path_edit: format!("{}/{}/:id/edit", prefix, self.slug()),
+            path_delete: format!("{}/{}/:id/delete", prefix, self.slug()),
         }
     }
 }
