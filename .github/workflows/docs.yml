@@ -27,13 +27,20 @@ jobs:
       run: |
         cargo doc --no-deps --document-private-items
         
+    - name: Prepare Pages directory
+      run: |
+        mkdir -p pages
+        cp index.html pages/
+        cp -r target/doc/* pages/
+        
     - name: Setup Pages
       uses: actions/configure-pages@v4
       
     - name: Upload to GitHub Pages
-      uses: actions/upload-pages-artifact@v3
+      uses: actions/upload-pages-artifact@v4
       with:
-        path: target/doc
+        path: pages
+        retention-days: 1
         
     - name: Deploy to GitHub Pages
       id: deployment
