@@ -272,6 +272,14 @@ The library includes simple authentication by default:
 }))
 ```
 
+## Contact & Support
+
+### Questions & Feedback
+
+- **Telegram**: @tincoNomad - Direct message for quick questions
+- **GitHub Issues**: [github.com/TincoNomad/actix-admin/issues](https://github.com/TincoNomad/actix-admin/issues) - For bugs, feature requests, and discussions
+- **Discussions**: Use GitHub Discussions for community questions
+
 ## License
 
 AGPL-3.0 - See [LICENSE](LICENSE) file for details.
