@@ -3,8 +3,9 @@
 ## Project Overview
 - **Type**: Rust library for building admin panels with Actix-web 4
 - **Entry point**: `src/lib.rs` exports `AdminSite`, `AdminRegistry`, `AdminResource`
-- **Version**: 1.0.0 ready for publication
-- **Documentation**: Complete README with examples
+- **Version**: 0.1.0 ready for publication
+- **Documentation**: Complete README with examples, troubleshooting guide, and advanced configuration
+- **Status**: Fully tested with real-world implementation validation
 
 ## AI Assistant Skills & Capabilities
 
@@ -47,6 +48,7 @@
 - `cargo test --test test_registry` - Run specific test file
 - `cargo run --example memory` - Run the example app
 - `cargo publish --dry-run` - Validate before publishing
+- `cargo publish` - Publish to crates.io
 
 ### 🏗️ Architecture
 - **AdminSite**: Configures the admin URL prefix and mounts routes
@@ -59,6 +61,8 @@
 - Slugs must be unique (panics on duplicate)
 - Routes: `/{prefix}/{slug}`, `/{prefix}/{slug}/new`, `/{prefix}/{slug}/{id}`, `/{prefix}/{slug}/{id}/delete`
 - JSON serialization for template context to avoid Tera serialization issues
+- Actix-web routing philosophy: explicit slash handling, absolute URLs for redirects
+- Template variables: always provide defaults using `| default(value='')`
 
 ### 🧪 Testing Strategy
 - Tests use mock resources implementing `AdminResource`
@@ -85,12 +89,19 @@
 
 ### 📦 Publishing & Deployment
 - Ready for crates.io publication
-- MIT License included
-- Complete documentation
-- Version 1.0.0 stable
+- AGPL-3.0 License included
+- Complete documentation with troubleshooting guide
+- Version 0.1.0 stable
+- `cargo publish --dry-run` validated successfully
 
 ### 🔍 Debugging Assistance
-- **Template errors**: Check Tera syntax and context variables
-- **Route errors**: Verify AdminSite configuration and slug uniqueness
+- **Template errors**: Check Tera syntax and context variables, use default values
+- **Route errors**: Verify AdminSite configuration and slug uniqueness, check slash handling
 - **Async errors**: Ensure proper .await usage and error propagation
 - **Build errors**: Check trait implementations and dependency versions
+- **Common issues**: See `docs/troubleshooting.md` for comprehensive solutions to:
+  - Actix-web routing with/without trailing slashes
+  - Double slash URLs in redirects
+  - Tera filter limitations (range, arithmetic)
+  - AdminRegistry Clone requirements
+  - FormField parameter requirements

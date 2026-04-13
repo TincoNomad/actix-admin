@@ -78,8 +78,9 @@ pub async fn list(
     ctx.insert("total", &result.total);
     ctx.insert("total_pages", &((result.total + result.per_page - 1) / result.per_page));
     
-    ctx.insert("path_dashboard", &format!("/{}/", prefix.0));
-    ctx.insert("path_logout", &format!("/{}/logout", prefix.0));
+    let prefix_trimmed = prefix.0.trim_start_matches('/');
+    ctx.insert("path_dashboard", &format!("/{}/", prefix_trimmed));
+    ctx.insert("path_logout", &format!("/{}/logout", prefix_trimmed));
     ctx.insert("user", &user);
     
     ctx.insert("resources", &registry.all().iter().map(|r| r.info(&prefix.0)).collect::<Vec<_>>());
@@ -123,8 +124,9 @@ pub async fn new(
     ctx.insert("errors", &HashMap::<String, String>::new());
     ctx.insert("is_new", &true);
     ctx.insert("resources", &registry.all().iter().map(|r| r.info(&prefix.0)).collect::<Vec<_>>());
-    ctx.insert("path_dashboard", &format!("/{}/", prefix.0));
-    ctx.insert("path_logout", &format!("/{}/logout", prefix.0));
+    let prefix_trimmed = prefix.0.trim_start_matches('/');
+    ctx.insert("path_dashboard", &format!("/{}/", prefix_trimmed));
+    ctx.insert("path_logout", &format!("/{}/logout", prefix_trimmed));
     ctx.insert("user", &user);
 
     match tmpl.render("form.html", &ctx) {
@@ -226,8 +228,9 @@ pub async fn edit(
     ctx.insert("errors", &HashMap::<String, String>::new());
     ctx.insert("is_new", &false);
     ctx.insert("resources", &registry.all().iter().map(|r| r.info(&prefix.0)).collect::<Vec<_>>());
-    ctx.insert("path_dashboard", &format!("/{}/", prefix.0));
-    ctx.insert("path_logout", &format!("/{}/logout", prefix.0));
+    let prefix_trimmed = prefix.0.trim_start_matches('/');
+    ctx.insert("path_dashboard", &format!("/{}/", prefix_trimmed));
+    ctx.insert("path_logout", &format!("/{}/logout", prefix_trimmed));
     ctx.insert("user", &user);
 
     match tmpl.render("form.html", &ctx) {

@@ -8,7 +8,7 @@
 </div>
 
 <form method="GET" style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
-    <input type="text" name="search" value="{{ query.search }}" placeholder="Search..." class="form-control" style="max-width: 300px;">
+    <input type="text" name="search" value="{{ query.search | default(value='') }}" placeholder="Search..." class="form-control" style="max-width: 300px;">
     <button type="submit" class="btn btn-primary">Search</button>
 </form>
 
@@ -19,8 +19,8 @@
             <th>
                 <a href="{{ resource.path_list }}?sort_by={{ col.key }}" style="color: inherit; text-decoration: none; display: block;">
                     {{ col.label }}
-                    {% if query.sort_by == col.key %}
-                        {% if query.sort_dir == 'asc' %}▲{% else %}▼{% endif %}
+                    {% if query.sort_by | default(value='') == col.key %}
+                        {% if query.sort_dir | default(value='asc') == 'asc' %}▲{% else %}▼{% endif %}
                     {% endif %}
                 </a>
             </th>
@@ -52,8 +52,9 @@
             {% endif %}
         </tr>
         {% else %}
+        {% set col_count = columns | length %}
         <tr>
-            <td colspan="{% if resource.can_delete %}{{ columns | length + 1 }}{% else %}{{ columns | length }}{% endif %}" style="text-align: center; padding: 3rem; color: var(--text-light);">
+            <td colspan="{% if resource.can_delete %}{{ col_count + 1 }}{% else %}{{ col_count }}{% endif %}" style="text-align: center; padding: 3rem; color: var(--text-light);">
                 No records found.
             </td>
         </tr>
@@ -62,8 +63,16 @@
 </table>
 
 <div class="pagination">
-    {% for p in range(start=1, end=total_pages + 1) %}
-    <a href="{{ resource.path_list }}?page={{ p }}" class="{% if p == page %}active{% endif %}">{{ p }}</a>
-    {% endfor %}
+    {% if total_pages > 1 %}
+        {% if page > 1 %}
+        <a href="{{ resource.path_list }}?page={{ page - 1 }}" class="btn">&laquo; Prev</a>
+        {% endif %}
+        
+        <span style="margin: 0 1rem;">Page {{ page }} of {{ total_pages }}</span>
+        
+        {% if page < total_pages %}
+        <a href="{{ resource.path_list }}?page={{ page + 1 }}" class="btn">Next &raquo;</a>
+        {% endif %}
+    {% endif %}
 </div>
 {% endblock %}

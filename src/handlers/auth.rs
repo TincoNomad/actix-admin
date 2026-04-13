@@ -50,7 +50,7 @@ pub async fn login(
             return HttpResponse::InternalServerError().body("Session error");
         }
         return HttpResponse::Found()
-            .insert_header(("Location", format!("/{}/", prefix.0)))
+            .insert_header(("Location", "/admin/"))
             .finish();
     }
 
@@ -71,6 +71,6 @@ pub async fn login(
 pub async fn logout(session: Session, prefix: web::Data<AdminPrefix>) -> impl Responder {
     session.purge();
     HttpResponse::Found()
-        .insert_header(("Location", format!("/{}/login", prefix.0)))
+        .insert_header(("Location", "/admin/login"))
         .finish()
 }

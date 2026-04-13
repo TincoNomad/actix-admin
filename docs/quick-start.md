@@ -63,7 +63,7 @@ impl AdminResource for ProductAdmin {
         vec![
             FormField::text("name", "Name").required(),
             FormField::number("price", "Price").required(),
-            FormField::boolean("active", "Active"),
+            FormField::textarea("description", "Description", 4),
         ]
     }
 

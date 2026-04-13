@@ -39,12 +39,14 @@ impl AdminSite {
         cfg.service(
             web::scope(&prefix)
                 .route("", web::get().to(handlers::dashboard::index))
+                .route("/", web::get().to(handlers::dashboard::index))
                 .route("/login", web::get().to(handlers::auth::login_page))
                 .route("/login", web::post().to(handlers::auth::login))
                 .route("/logout", web::get().to(handlers::auth::logout))
                 .service(
                     web::scope("/{slug}")
                         .route("", web::get().to(handlers::resource::list))
+                        .route("/", web::get().to(handlers::resource::list))
                         .route("/new", web::get().to(handlers::resource::new))
                         .route("/new", web::post().to(handlers::resource::create))
                         .route("/{id}", web::get().to(handlers::resource::edit))

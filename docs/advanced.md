@@ -2,54 +2,166 @@
 
 This guide covers advanced configuration options for actix-admin.
 
-## Custom Authentication
+## Authentication
 
-### OAuth2 Integration
+### Simple Authentication (Built-in)
+
+The library includes simple username/password authentication:
 
 ```rust
-use actix_admin::handlers::auth::{AuthHandler, AuthUser};
-
-struct OAuth2Auth;
-
-#[async_trait]
-impl AuthHandler for OAuth2Auth {
-    async fn authenticate(&self, token: &str) -> Result<AuthUser, AdminError> {
-        // Validate OAuth2 token
-        // Return user info or error
-        Ok(AuthUser {
-            id: "user_id".to_string(),
-            username: "username".to_string(),
-            email: "user@example.com".to_string(),
-        })
-    }
-}
+.app_data(web::Data::new(actix_admin::handlers::auth::SimpleAuth {
+    username: "admin".to_string(),
+    password: "admin".to_string(),
+}))
 ```
 
-### Database Authentication
+### Custom Authentication
+
+To implement custom authentication, you'll need to modify the auth handlers. The current implementation uses `SimpleAuth` which checks credentials against stored values.
+
+For database authentication, you would typically:
+
+1. Create a custom auth struct
+2. Modify the login handler to use your database
+3. Update session management accordingly
+
+## Template Customization
+
+### Template Variables
+
+All templates receive these common variables:
 
 ```rust
-struct DatabaseAuth {
+ctx.insert("title", &site_title);
+ctx.insert("page_title", &current_page);
+ctx.insert("user", &authenticated_user);
+ctx.insert("path_dashboard", &dashboard_path);
+ctx.insert("path_logout", &logout_path);
+```
+
+### Custom Templates
+
+You can override templates by providing your own Tera instance:
+
+```rust
+let mut tera = Tera::new("templates/**/*")?;
+// Add custom templates or override defaults
+```
+
+## Advanced Routing
+
+### Custom Routes
+
+Add custom routes alongside admin routes:
+
+```rust
+AdminSite::new("/admin")
+    .mount(cfg, registry);
+
+// Add custom routes
+cfg.route("/admin/custom", web::get().to(custom_handler));
+```
+
+### Middleware Integration
+
+Add middleware before or after admin routes:
+
+```rust
+HttpServer::new(move || {
+    App::new()
+        .wrap(middleware::Logger::default())  // Before admin
+        .configure(|cfg| {
+            AdminSite::new("/admin").mount(cfg, registry)
+        })
+        .wrap(custom_middleware)  // After admin
+})
+```
+
+## Database Integration
+
+### PostgreSQL Example
+
+```rust
+use sqlx::PgPool;
+
+struct ProductAdmin {
     pool: PgPool,
 }
 
 #[async_trait]
-impl AuthHandler for DatabaseAuth {
-    async fn authenticate(&self, credentials: &Credentials) -> Result<AuthUser, AdminError> {
-        let user = sqlx::query!(
-            "SELECT id, username, email FROM users WHERE username = $1 AND password = $2",
-            credentials.username,
-            hash_password(&credentials.password)
+impl AdminResource for ProductAdmin {
+    async fn list(&self, query: ListQuery) -> Result<ListResult, AdminError> {
+        let offset = (query.page.unwrap_or(1) - 1) * query.per_page.unwrap_or(10);
+        
+        let rows = sqlx::query!(
+            "SELECT id, name, price FROM products ORDER BY name LIMIT $1 OFFSET $2",
+            query.per_page.unwrap_or(10) as i64,
+            offset as i64
         )
-        .fetch_one(&self.pool)
+        .fetch_all(&self.pool)
         .await?;
         
-        Ok(AuthUser {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-        })
+        let total = sqlx::query_scalar!("SELECT COUNT(*) FROM products")
+            .fetch_one(&self.pool)
+            .await?
+            .unwrap_or(0);
+            
+        // Convert rows to JSON...
     }
 }
+```
+
+## Performance Considerations
+
+### Database Connections
+
+Use connection pooling for better performance:
+
+```rust
+let pool = PgPool::connect(&database_url).await?;
+```
+
+### Caching
+
+Cache frequently accessed data:
+
+```rust
+use std::collections::HashMap;
+use tokio::sync::RwLock;
+
+struct CachedAdmin {
+    cache: Arc<RwLock<HashMap<String, serde_json::Value>>>,
+    inner: ProductAdmin,
+}
+```
+
+## Security
+
+### HTTPS
+
+Always use HTTPS in production:
+
+```rust
+HttpServer::new(move || {
+    // ... app configuration
+})
+.bind_openssl("0.0.0.0:443", ssl_builder)?
+.run()
+.await
+```
+
+### Session Security
+
+Configure secure sessions:
+
+```rust
+SessionMiddleware::builder(
+    CookieSessionStore::default(),
+    actix_web::cookie::Key::generate()
+)
+.cookie_secure(true)  // HTTPS only
+.cookie_http_only(true)
+.build()
 ```
 
 ## Custom Field Types

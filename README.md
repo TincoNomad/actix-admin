@@ -186,7 +186,7 @@ FormField::select("category", "Category", vec![
     ("electronics", "Electronics"),
     ("clothing", "Clothing"),
 ])
-FormField::textarea("description", "Description")
+FormField::textarea("description", "Description", 4)
 ```
 
 ### Column Types
@@ -219,6 +219,57 @@ app_data(web::Data::new(actix_admin::handlers::auth::SimpleAuth {
 /admin/{slug}/new         # Create form
 /admin/{slug}/{id}        # Edit form
 /admin/{slug}/{id}/delete # Delete action
+```
+
+## Important Notes
+
+### Actix-Web Routing Behavior
+
+This library follows Actix-web's routing philosophy. Some important considerations:
+
+**Slash Handling:**
+Actix-web doesn't automatically handle URLs with and without trailing slashes. The library configures both:
+
+```rust
+// In site.rs - both routes are configured
+.route("", web::get().to(handlers::dashboard::index))
+.route("/", web::get().to(handlers::dashboard::index))
+```
+
+**URL Construction:**
+When constructing URLs in templates, use absolute paths to avoid double slashes:
+
+```rust
+// Instead of: format!("/{}/login", prefix.0)
+// Use: "/admin/login"
+```
+
+**Template Variables:**
+Always provide default values in Tera templates:
+
+```jinja2
+{{ query.search | default(value='') }}
+{{ query.sort_dir | default(value='asc') }}
+```
+
+### Field Type Requirements
+
+Some field types have additional required parameters:
+
+```rust
+// Textarea requires rows parameter
+FormField::textarea("description", "Description", 4)  // rows = 4
+```
+
+### Authentication
+
+The library includes simple authentication by default:
+
+```rust
+.app_data(web::Data::new(actix_admin::handlers::auth::SimpleAuth {
+    username: "admin".to_string(),
+    password: "admin".to_string(),
+}))
 ```
 
 ## License

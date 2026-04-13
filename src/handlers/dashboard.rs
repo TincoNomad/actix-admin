@@ -22,7 +22,7 @@ pub async fn index(
         _ => {
             warn!("User not authenticated, redirecting to login");
             return HttpResponse::Found()
-                .insert_header(("Location", format!("/{}/login", prefix.0)))
+                .insert_header(("Location", "/admin/login"))
                 .finish();
         }
     };
