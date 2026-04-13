@@ -1,4 +1,4 @@
-use actix_admin::{AdminResource, types::*};
+use actix_web_admin::{AdminResource, types::*};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

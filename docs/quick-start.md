@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-This guide will help you get actix-admin running in minutes.
+This guide will help you get actix-web-admin running in minutes.
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-actix-admin = "0.1.0"
+actix-web-admin = "0.1.0"
 actix-web = "4"
 actix-session = { version = "0.9", features = ["cookie-session"] }
 tokio = { version = "1", features = ["full"] }
@@ -35,7 +35,7 @@ struct Product {
 ### Step 2: Implement AdminResource
 
 ```rust
-use actix_admin::{AdminResource, types::*};
+use actix_web_admin::{AdminResource, types::*};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -74,7 +74,7 @@ impl AdminResource for ProductAdmin {
 ### Step 3: Configure Your Server
 
 ```rust
-use actix_admin::{AdminRegistry, AdminSite, init_templates};
+use actix_web_admin::{AdminRegistry, AdminSite, init_templates};
 use actix_session::SessionMiddleware;
 use actix_session::storage::CookieSessionStore;
 
@@ -89,7 +89,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(templates.clone()))
-            .app_data(web::Data::new(actix_admin::handlers::auth::SimpleAuth {
+            .app_data(web::Data::new(actix_web_admin::handlers::auth::SimpleAuth {
                 username: "admin".to_string(),
                 password: "admin".to_string(),
             }))

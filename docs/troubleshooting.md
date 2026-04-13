@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-This guide covers common issues and solutions when working with actix-admin.
+This guide covers common issues and solutions when working with actix-web-admin.
 
 ## Common Issues
 
@@ -117,7 +117,7 @@ HttpServer::new(move || {
 **Solution:** Use appropriate error types:
 
 ```rust
-use actix_admin::types::AdminError;
+use actix_web_admin::types::AdminError;
 
 // For missing resources
 Err(AdminError::NotFound)

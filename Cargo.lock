@@ -3,23 +3,6 @@
 version = 4
 
 [[package]]
-name = "actix-admin"
-version = "0.1.0"
-dependencies = [
- "actix-http",
- "actix-session",
- "actix-web",
- "async-trait",
- "env_logger",
- "log",
- "serde",
- "serde_json",
- "tera",
- "tokio",
- "uuid",
-]
-
-[[package]]
 name = "actix-codec"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -204,6 +187,23 @@ dependencies = [
  "time",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "actix-web-admin"
+version = "0.1.0"
+dependencies = [
+ "actix-http",
+ "actix-session",
+ "actix-web",
+ "async-trait",
+ "env_logger",
+ "log",
+ "serde",
+ "serde_json",
+ "tera",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]

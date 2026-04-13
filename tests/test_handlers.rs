@@ -1,11 +1,11 @@
 use actix_web::{test, web, App};
 use actix_session::storage::CookieSessionStore;
 use actix_session::SessionMiddleware;
-use actix_admin::{AdminRegistry, AdminSite, AdminResource, init_templates};
+use actix_web_admin::{AdminRegistry, AdminSite, AdminResource, init_templates};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use actix_admin::types::*;
+use actix_web_admin::types::*;
 
 struct MockResource {
     db: Arc<Mutex<Vec<serde_json::Value>>>,
@@ -57,7 +57,7 @@ async fn setup_app() -> impl actix_web::dev::Service<actix_http::Request, Respon
     test::init_service(
         App::new()
             .app_data(web::Data::new(templates))
-            .app_data(web::Data::new(actix_admin::handlers::auth::SimpleAuth {
+            .app_data(web::Data::new(actix_web_admin::handlers::auth::SimpleAuth {
                 username: "admin".to_string(),
                 password: "admin".to_string(),
             }))

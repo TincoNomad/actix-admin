@@ -5,7 +5,7 @@
 //! ## Quick Start
 //! 
 //! ```rust,no_run
-//! use actix_admin::{AdminRegistry, AdminSite, AdminResource, init_templates};
+//! use actix_web_admin::{AdminRegistry, AdminSite, AdminResource, init_templates};
 //! use async_trait::async_trait;
 //! use std::collections::HashMap;
 //! use std::sync::{Arc, Mutex};

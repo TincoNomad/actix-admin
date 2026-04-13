@@ -1,12 +1,12 @@
 [package]
-name = "actix-admin"
+name = "actix-web-admin"
 version = "0.1.0"
 edition = "2021"
 description = "A powerful admin panel library for Actix-web 4 applications"
 license = "AGPL-3.0"
 repository = "https://github.com/yourusername/actix-admin"
 homepage = "https://github.com/yourusername/actix-admin"
-documentation = "https://docs.rs/actix-admin"
+documentation = "https://docs.rs/actix-web-admin"
 readme = "README.md"
 keywords = ["actix", "admin", "crud", "web", "panel"]
 categories = ["web-programming", "web-programming::http-server"]

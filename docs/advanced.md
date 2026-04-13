@@ -1,6 +1,6 @@
 # Advanced Configuration
 
-This guide covers advanced configuration options for actix-admin.
+This guide covers advanced configuration options for actix-web-admin.
 
 ## Authentication
 
@@ -9,7 +9,7 @@ This guide covers advanced configuration options for actix-admin.
 The library includes simple username/password authentication:
 
 ```rust
-.app_data(web::Data::new(actix_admin::handlers::auth::SimpleAuth {
+.app_data(web::Data::new(actix_web_admin::handlers::auth::SimpleAuth {
     username: "admin".to_string(),
     password: "admin".to_string(),
 }))
@@ -265,7 +265,7 @@ impl AdminResource for ProductAdmin {
 ```rust
 // Load custom templates
 let mut tera = Tera::new("templates/**/*")?;
-// Add actix-admin templates
+// Add actix-web-admin templates
 tera.add_raw_template("base.html", include_str!("templates/base.html"))?;
 ```
 

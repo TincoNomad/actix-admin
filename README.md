@@ -1,4 +1,4 @@
-# actix-admin
+# actix-web-admin
 
 A powerful admin panel library for Actix-web 4 applications that automatically generates CRUD interfaces.
 
@@ -18,7 +18,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-actix-admin = "0.1.0"
+actix-web-admin = "0.1.0"
 actix-web = "4"
 actix-session = { version = "0.9", features = ["cookie-session"] }
 tokio = { version = "1", features = ["full"] }
@@ -27,7 +27,7 @@ tokio = { version = "1", features = ["full"] }
 ### Basic Example
 
 ```rust
-use actix_admin::{AdminRegistry, AdminSite, AdminResource, init_templates};
+use actix_web_admin::{AdminRegistry, AdminSite, AdminResource, init_templates};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -134,7 +134,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(templates.clone()))
-            .app_data(web::Data::new(actix_admin::handlers::auth::SimpleAuth {
+            .app_data(web::Data::new(actix_web_admin::handlers::auth::SimpleAuth {
                 username: "admin".to_string(),
                 password: "admin".to_string(),
             }))
@@ -203,7 +203,7 @@ Column::date("created_at", "Created")
 Built-in simple authentication:
 
 ```rust
-app_data(web::Data::new(actix_admin::handlers::auth::SimpleAuth {
+app_data(web::Data::new(actix_web_admin::handlers::auth::SimpleAuth {
     username: "admin".to_string(),
     password: "admin".to_string(),
 }))
@@ -266,7 +266,7 @@ FormField::textarea("description", "Description", 4)  // rows = 4
 The library includes simple authentication by default:
 
 ```rust
-.app_data(web::Data::new(actix_admin::handlers::auth::SimpleAuth {
+.app_data(web::Data::new(actix_web_admin::handlers::auth::SimpleAuth {
     username: "admin".to_string(),
     password: "admin".to_string(),
 }))
