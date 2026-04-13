@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2021"
 description = "A powerful admin panel library for Actix-web 4 applications"
 license = "AGPL-3.0"
-repository = "https://github.com/yourusername/actix-admin"
-homepage = "https://github.com/yourusername/actix-admin"
+repository = "https://github.com/TincoNomad/actix-admin"
+homepage = "https://github.com/TincoNomad/actix-admin"
 documentation = "https://docs.rs/actix-web-admin"
 readme = "README.md"
 keywords = ["actix", "admin", "crud", "web", "panel"]
 categories = ["web-programming", "web-programming::http-server"]
-authors = ["Your Name <your.email@example.com>"]
+authors = ["TincoNomad (@tincoNomad)"]
 
 [dependencies]
 actix-web = "4"
