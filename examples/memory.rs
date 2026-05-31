@@ -1,6 +1,7 @@
 use actix_web::{web, App, HttpServer};
 use actix_session::storage::CookieSessionStore;
 use actix_session::SessionMiddleware;
+use actix_web_admin::auth::UserStore;
 use actix_web_admin::{AdminRegistry, AdminSite, AdminResource, init_templates};
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -145,17 +146,18 @@ async fn main() -> std::io::Result<()> {
         ])),
     });
 
-    let _admin_site = AdminSite::new("/admin").title("My Store Admin");
-    
     let secret_key = actix_web::cookie::Key::from(b"a_very_long_secret_key_that_is_exactly_64_bytes_long_123456789012");
+
+    // Create initial admin user (idempotent — skip if already exists)
+    let store = actix_web_admin::auth::JsonUserStore::new("users.json");
+    if store.find_by_username("admin").await.unwrap().is_none() {
+        store.create_user("admin", "admin@example.com", "Admin", "admin", true).await.unwrap();
+    }
+    let store = Arc::new(store);
 
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(templates.clone()))
-            .app_data(web::Data::new(actix_web_admin::handlers::auth::SimpleAuth {
-                username: "admin".to_string(),
-                password: "admin".to_string(),
-            }))
             .wrap(SessionMiddleware::new(CookieSessionStore::default(), secret_key.clone()))
             .configure(|cfg| {
                 let mut reg = AdminRegistry::new();
@@ -165,7 +167,10 @@ async fn main() -> std::io::Result<()> {
                         Product { id: "2".to_string(), name: "T-Shirt".to_string(), price: 19.99, active: true, category: "clothing".to_string() },
                     ])),
                 });
-                AdminSite::new("/admin").title("My Store Admin").mount(cfg, reg)
+                AdminSite::new("/admin")
+                    .title("My Store Admin")
+                    .with_user_store(store.clone())
+                    .mount(cfg, reg)
             })
     })
     .bind(("127.0.0.1", 8080))?

@@ -4,26 +4,149 @@ This guide covers advanced configuration options for actix-web-admin.
 
 ## Authentication
 
-### Simple Authentication (Built-in)
+### UserStore Trait (Recommended)
 
-The library includes simple username/password authentication:
+The library uses the `UserStore` trait for authentication. Implement it for your database:
 
 ```rust
-.app_data(web::Data::new(actix_web_admin::handlers::auth::SimpleAuth {
-    username: "admin".to_string(),
-    password: "admin".to_string(),
-}))
+use actix_web_admin::auth::{UserStore, AuthError, User};
+use async_trait::async_trait;
+use std::sync::Arc;
+
+struct MyDatabaseStore {
+    pool: sqlx::PgPool,
+}
+
+#[async_trait]
+impl UserStore for MyDatabaseStore {
+    async fn find_by_username(&self, username: &str) -> Result<Option<User>, AuthError> {
+        let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1")
+            .bind(username)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| AuthError::Database(e.to_string()))?;
+        Ok(user)
+    }
+
+    async fn find_by_email(&self, email: &str) -> Result<Option<User>, AuthError> {
+        let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE email = $1")
+            .bind(email)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| AuthError::Database(e.to_string()))?;
+        Ok(user)
+    }
+
+    async fn create_user(&self, username: &str, email: &str, name: &str, password: &str, is_superuser: bool) -> Result<User, AuthError> {
+        let hash = actix_web_admin::auth::hash_password(password)?;
+        let user = sqlx::query_as::<_, User>(
+            "INSERT INTO users (username, email, name, password_hash, is_superuser) VALUES ($1, $2, $3, $4, $5) RETURNING *"
+        )
+        .bind(username).bind(email).bind(name).bind(&hash).bind(is_superuser)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| AuthError::Database(e.to_string()))?;
+        Ok(user)
+    }
+
+    async fn delete_user(&self, username: &str) -> Result<(), AuthError> {
+        sqlx::query("DELETE FROM users WHERE username = $1")
+            .bind(username)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| AuthError::Database(e.to_string()))?;
+        Ok(())
+    }
+
+    fn all_users(&self) -> Result<Vec<User>, AuthError> {
+        let users = sqlx::query_as::<_, User>("SELECT * FROM users ORDER BY username")
+            .fetch_all(&self.pool);
+        // Note: all_users is synchronous in the trait — use a cached list or block_on
+        Ok(users)
+    }
+}
 ```
 
-### Custom Authentication
+Then pass it to actix-web-admin:
 
-To implement custom authentication, you'll need to modify the auth handlers. The current implementation uses `SimpleAuth` which checks credentials against stored values.
+```rust
+let store = Arc::new(MyDatabaseStore { pool }) as Arc<dyn UserStore>;
 
-For database authentication, you would typically:
+App::new()
+    .app_data(web::Data::new(store.clone()))
+    .configure(|cfg| {
+        AdminSite::new("/admin")
+            .with_user_store(store.clone())
+            .mount(cfg, registry)
+    })
+```
 
-1. Create a custom auth struct
-2. Modify the login handler to use your database
-3. Update session management accordingly
+### JsonUserStore (Built-in)
+
+For local development or simple deployments, `JsonUserStore` persists users to a JSON file:
+
+```rust
+use actix_web_admin::auth::JsonUserStore;
+use std::sync::Arc;
+
+let store = Arc::new(JsonUserStore::new("users.json"));
+```
+
+### SimpleAuth (Deprecated)
+
+`SimpleAuth` is deprecated. Migrate to the `UserStore` trait pattern above.
+
+---
+
+## CLI Module
+
+### Using the `cli` Module in Your Own Binary
+
+The public `cli` module exposes async functions you can use in your own CLI:
+
+```rust
+use actix_web_admin::cli;
+
+#[tokio::main]
+async fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    match args.get(1).map(|s| s.as_str()) {
+        Some("createsuperuser") => cli::create_superuser_interactive(&args[2..]).await.unwrap(),
+        Some("deleteuser") => cli::delete_user(&args[2..]).await.unwrap(),
+        Some("listusers") => cli::list_users(&args[2..]).await.unwrap(),
+        _ => cli::print_help("my-cli"),
+    }
+}
+```
+
+All functions require an active Tokio runtime (`#[tokio::main]` or `#[actix_web::main]`).
+
+### Custom User Store CLI
+
+If you use a custom database instead of `JsonUserStore`, write your own CLI:
+
+```rust
+use actix_web_admin::cli;
+use std::sync::Arc;
+
+#[tokio::main]
+async fn main() {
+    let store = Arc::new(MyDatabaseStore::new());
+    let args: Vec<String> = std::env::args().collect();
+
+    match args.get(1).map(|s| s.as_str()) {
+        Some("createsuperuser") => {
+            let username = dialoguer::Input::new().with_prompt("Username").interact_text().unwrap();
+            let password = dialoguer::Password::new().with_prompt("Password").interact().unwrap();
+            store.create_user(&username, "", &username, &password, true).await.unwrap();
+            println!("Superuser '{}' created.", username);
+        }
+        _ => cli::print_help("my-cli"),
+    }
+}
+```
+
+---
 
 ## Template Customization
 
@@ -41,39 +164,47 @@ ctx.insert("path_logout", &logout_path);
 
 ### Custom Templates
 
-You can override templates by providing your own Tera instance:
+Override templates by providing your own Tera instance:
 
 ```rust
 let mut tera = Tera::new("templates/**/*")?;
-// Add custom templates or override defaults
+tera.add_raw_template("base.html", include_str!("templates/base.html"))?;
 ```
 
-## Advanced Routing
+## Routing
+
+### Dynamic Admin Prefix
+
+The prefix is stored without a leading slash. All handlers construct paths dynamically:
+
+```rust
+// prefix.0 == "admin" (no leading slash)
+let dashboard_url = format!("/{}/", prefix.0);
+let login_url = format!("/{}/login", prefix.0);
+let logout_url = format!("/{}/logout", prefix.0);
+```
+
+This avoids double-slash issues (e.g. `//admin/login`).
 
 ### Custom Routes
 
 Add custom routes alongside admin routes:
 
 ```rust
-AdminSite::new("/admin")
-    .mount(cfg, registry);
-
-// Add custom routes
+AdminSite::new("/admin").mount(cfg, registry);
 cfg.route("/admin/custom", web::get().to(custom_handler));
 ```
 
 ### Middleware Integration
 
-Add middleware before or after admin routes:
-
 ```rust
 HttpServer::new(move || {
     App::new()
-        .wrap(middleware::Logger::default())  // Before admin
+        .wrap(middleware::Logger::default())
         .configure(|cfg| {
             AdminSite::new("/admin").mount(cfg, registry)
         })
-        .wrap(custom_middleware)  // After admin
+        .wrap(custom_middleware)
 })
 ```
 
@@ -84,260 +215,32 @@ HttpServer::new(move || {
 ```rust
 use sqlx::PgPool;
 
-struct ProductAdmin {
-    pool: PgPool,
-}
+struct ProductAdmin { pool: PgPool }
 
 #[async_trait]
 impl AdminResource for ProductAdmin {
     async fn list(&self, query: ListQuery) -> Result<ListResult, AdminError> {
         let offset = (query.page.unwrap_or(1) - 1) * query.per_page.unwrap_or(10);
-        
-        let rows = sqlx::query!(
-            "SELECT id, name, price FROM products ORDER BY name LIMIT $1 OFFSET $2",
-            query.per_page.unwrap_or(10) as i64,
-            offset as i64
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        
+        let rows = sqlx::query!("SELECT id, name, price, active FROM products ORDER BY name LIMIT $1 OFFSET $2",
+            query.per_page.unwrap_or(10) as i64, offset as i64)
+            .fetch_all(&self.pool).await?;
         let total = sqlx::query_scalar!("SELECT COUNT(*) FROM products")
-            .fetch_one(&self.pool)
-            .await?
-            .unwrap_or(0);
-            
-        // Convert rows to JSON...
+            .fetch_one(&self.pool).await?.unwrap_or(0);
+        let rows: Vec<serde_json::Value> = rows.into_iter().map(|p| serde_json::json!({
+            "id": p.id, "name": p.name, "price": p.price, "active": p.active
+        })).collect();
+        Ok(ListResult { rows, total: total as u64, page: query.page.unwrap_or(1), per_page: query.per_page.unwrap_or(10) })
     }
+    // Implement get, create, update, delete similarly...
 }
 ```
 
 ## Performance Considerations
 
-### Database Connections
-
-Use connection pooling for better performance:
-
-```rust
-let pool = PgPool::connect(&database_url).await?;
-```
-
-### Caching
-
-Cache frequently accessed data:
-
-```rust
-use std::collections::HashMap;
-use tokio::sync::RwLock;
-
-struct CachedAdmin {
-    cache: Arc<RwLock<HashMap<String, serde_json::Value>>>,
-    inner: ProductAdmin,
-}
-```
-
-## Security
-
-### HTTPS
-
-Always use HTTPS in production:
-
-```rust
-HttpServer::new(move || {
-    // ... app configuration
-})
-.bind_openssl("0.0.0.0:443", ssl_builder)?
-.run()
-.await
-```
-
-### Session Security
-
-Configure secure sessions:
-
-```rust
-SessionMiddleware::builder(
-    CookieSessionStore::default(),
-    actix_web::cookie::Key::generate()
-)
-.cookie_secure(true)  // HTTPS only
-.cookie_http_only(true)
-.build()
-```
-
-## Custom Field Types
-
-### Date Picker
-
-```rust
-impl FormField {
-    pub fn date(name: &str, label: &str) -> Self {
-        FormField {
-            name: name.to_string(),
-            label: label.to_string(),
-            field_type: FieldType::Date,
-            required: false,
-            options: vec![],
-            default: None,
-        }
-    }
-}
-```
-
-### File Upload
-
-```rust
-impl FormField {
-    pub fn file(name: &str, label: &str) -> Self {
-        FormField {
-            name: name.to_string(),
-            label: label.to_string(),
-            field_type: FieldType::File,
-            required: false,
-            options: vec![],
-            default: None,
-        }
-    }
-}
-```
-
-## Database Integration
-
-### PostgreSQL Example
-
-```rust
-use sqlx::PgPool;
-
-struct ProductAdmin {
-    pool: PgPool,
-}
-
-#[async_trait]
-impl AdminResource for ProductAdmin {
-    async fn list(&self, query: ListQuery) -> Result<ListResult, AdminError> {
-        let offset = (query.page.unwrap_or(1) - 1) * query.per_page.unwrap_or(10);
-        
-        let products = sqlx::query!(
-            "SELECT id, name, price, active FROM products 
-             WHERE ($1 IS NULL OR name ILIKE $1) 
-             ORDER BY created_at DESC 
-             LIMIT $2 OFFSET $3",
-            query.search.map(|s| format!("%{}%", s)),
-            query.per_page.unwrap_or(10) as i64,
-            offset as i64
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        
-        let total = sqlx::query_scalar!(
-            "SELECT COUNT(*) FROM products WHERE ($1 IS NULL OR name ILIKE $1)",
-            query.search.map(|s| format!("%{}%", s))
-        )
-        .fetch_one(&self.pool)
-        .await?
-        .unwrap_or(0) as i64;
-        
-        let rows: Vec<serde_json::Value> = products
-            .into_iter()
-            .map(|p| serde_json::json!({
-                "id": p.id,
-                "name": p.name,
-                "price": p.price,
-                "active": p.active,
-            }))
-            .collect();
-            
-        Ok(ListResult {
-            rows,
-            total: total as u64,
-            page: query.page.unwrap_or(1),
-            per_page: query.per_page.unwrap_or(10),
-        })
-    }
-    
-    // Implement other CRUD methods similarly...
-}
-```
-
-## Custom Templates
-
-### Override Default Templates
-
-```rust
-// Load custom templates
-let mut tera = Tera::new("templates/**/*")?;
-// Add actix-web-admin templates
-tera.add_raw_template("base.html", include_str!("templates/base.html"))?;
-```
-
-### Custom Dashboard
-
-```html
-<!-- templates/dashboard.html -->
-{% extends "base.html" %}
-{% block content %}
-<div class="dashboard-grid">
-    <div class="stats-card">
-        <h3>Total Products</h3>
-        <span class="stat-number">{{ total_products }}</span>
-    </div>
-    
-    <div class="recent-activity">
-        <h3>Recent Activity</h3>
-        {% for activity in recent_activities %}
-        <div class="activity-item">
-            {{ activity.description }}
-            <span class="activity-time">{{ activity.time }}</span>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-{% endblock %}
-```
-
-## Middleware Integration
-
-### Logging Middleware
-
-```rust
-use actix_web::middleware::Logger;
-
-HttpServer::new(move || {
-    App::new()
-        .wrap(Logger::default())
-        .wrap(SessionMiddleware::new(
-            CookieSessionStore::default(), 
-            secret_key.clone()
-        ))
-        // ... rest of configuration
-})
-```
-
-### CORS Middleware
-
-```rust
-use actix_cors::Cors;
-
-HttpServer::new(move || {
-    App::new()
-        .wrap(
-            Cors::default()
-                .allowed_origin("http://localhost:3000")
-                .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
-                .allowed_headers(vec!["Content-Type", "Authorization"])
-        )
-        // ... rest of configuration
-})
-```
-
-## Performance Optimization
-
 ### Connection Pooling
 
 ```rust
-let pool = PgPoolOptions::new()
-    .max_connections(20)
-    .connect(&database_url)
-    .await?;
+let pool = PgPoolOptions::new().max_connections(20).connect(&database_url).await?;
 ```
 
 ### Caching
@@ -354,40 +257,46 @@ struct CachedResource {
 #[async_trait]
 impl AdminResource for CachedResource {
     async fn get(&self, id: &str) -> Result<serde_json::Value, AdminError> {
-        // Try cache first
         if let Some(cached) = self.cache.read().await.get(id) {
             return Ok(cached.clone());
         }
-        
-        // Fetch from database
         let result = self.inner.get(id).await?;
-        
-        // Update cache
         self.cache.write().await.insert(id.to_string(), result.clone());
-        
         Ok(result)
     }
 }
 ```
 
-## Security Considerations
+## Security
+
+### HTTPS
+
+```rust
+HttpServer::new(move || { /* ... */ })
+    .bind_openssl("0.0.0.0:443", ssl_builder)?
+    .run().await
+```
+
+### Session Security
+
+```rust
+SessionMiddleware::builder(CookieSessionStore::default(), actix_web::cookie::Key::generate())
+    .cookie_secure(true)
+    .cookie_http_only(true)
+    .build()
+```
 
 ### Rate Limiting
 
 ```rust
-use actix_governor::{Governor, GovernorConfig};
+use actix_governor::{Governor, GovernorConfigBuilder};
 
-let governor_conf = GovernorConfig::default();
-let governor_conf = GovernorConfigBuilder::default()
-    .per_second(10)
-    .burst_size(2)
-    .finish()
-    .unwrap();
+let governor_conf = GovernorConfigBuilder::default().per_second(10).burst_size(2).finish().unwrap();
 
 HttpServer::new(move || {
     App::new()
         .wrap(Governor::new(&governor_conf))
-        // ... rest of configuration
+        // ...
 })
 ```
 
@@ -397,36 +306,21 @@ HttpServer::new(move || {
 impl AdminResource for ProductAdmin {
     async fn validate(&self, data: &HashMap<String, serde_json::Value>) -> Result<(), HashMap<String, String>> {
         let mut errors = HashMap::new();
-        
         if let Some(name) = data.get("name").and_then(|v| v.as_str()) {
-            if name.len() < 3 {
-                errors.insert("name".to_string(), "Name must be at least 3 characters".to_string());
-            }
-            if name.len() > 100 {
-                errors.insert("name".to_string(), "Name must be less than 100 characters".to_string());
-            }
+            if name.len() < 3 { errors.insert("name".to_string(), "Too short".to_string()); }
         } else {
-            errors.insert("name".to_string(), "Name is required".to_string());
+            errors.insert("name".to_string(), "Required".to_string());
         }
-        
-        if let Some(price) = data.get("price").and_then(|v| v.as_str()) {
-            if let Ok(price_val) = price.parse::<f64>() {
-                if price_val < 0.0 {
-                    errors.insert("price".to_string(), "Price must be positive".to_string());
-                }
-                if price_val > 999999.99 {
-                    errors.insert("price".to_string(), "Price is too high".to_string());
-                }
-            } else {
-                errors.insert("price".to_string(), "Invalid price format".to_string());
-            }
-        }
-        
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(errors)
-        }
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
     }
 }
+```
+
+## Custom Templates
+
+### Override Default Templates
+
+```rust
+let mut tera = Tera::new("templates/**/*")?;
+tera.add_raw_template("base.html", include_str!("templates/base.html"))?;
 ```

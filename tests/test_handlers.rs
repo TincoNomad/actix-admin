@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use actix_web_admin::types::*;
+use actix_web_admin::auth::{JsonUserStore, UserStore};
 
 struct MockResource {
     db: Arc<Mutex<Vec<serde_json::Value>>>,
@@ -53,17 +54,24 @@ async fn setup_app() -> impl actix_web::dev::Service<actix_http::Request, Respon
     let templates = init_templates();
     let mut registry = AdminRegistry::new();
     registry.register(MockResource { db: Arc::new(Mutex::new(vec![])) });
-    
+
+    let users_path = std::env::temp_dir().join("test_admin_handlers.json");
+    let _ = std::fs::remove_file(&users_path);
+    let store = JsonUserStore::new(&users_path);
+    store
+        .create_user("admin", "admin@test.com", "Admin", "admin", true)
+        .await
+        .unwrap();
+
     test::init_service(
         App::new()
             .app_data(web::Data::new(templates))
-            .app_data(web::Data::new(actix_web_admin::handlers::auth::SimpleAuth {
-                username: "admin".to_string(),
-                password: "admin".to_string(),
-            }))
             .wrap(SessionMiddleware::new(CookieSessionStore::default(), actix_web::cookie::Key::generate()))
             .configure(|cfg| {
-                AdminSite::new("/admin").title("Test Admin").mount(cfg, registry)
+                AdminSite::new("/admin")
+                    .title("Test Admin")
+                    .with_user_store(Arc::new(store))
+                    .mount(cfg, registry)
             })
     ).await
 }
@@ -71,7 +79,7 @@ async fn setup_app() -> impl actix_web::dev::Service<actix_http::Request, Respon
 #[actix_web::test]
 async fn test_auth_flow() {
     let app = setup_app().await;
-    
+
     let req = test::TestRequest::get().uri("/admin/login").to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -80,10 +88,56 @@ async fn test_auth_flow() {
 #[actix_web::test]
 async fn test_protected_routes() {
     let app = setup_app().await;
-    
+
     let req = test::TestRequest::get().uri("/admin/").to_request();
     let resp = test::call_service(&app, req).await;
-    // Should redirect to login (302) or return 404 if route not found
-    // For now, let's just check it's not a successful response
-    assert!(!resp.status().is_success());
+    assert_eq!(resp.status(), 302, "should redirect to login");
+}
+
+#[actix_web::test]
+async fn test_login_and_access_protected() {
+    let app = setup_app().await;
+
+    let req = test::TestRequest::post()
+        .uri("/admin/login")
+        .set_form(&std::collections::HashMap::from([
+            ("username", "admin"),
+            ("password", "admin"),
+        ]))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 302, "login should redirect");
+
+    let cookie = resp.response().cookies().next().unwrap().to_owned();
+
+    let req = test::TestRequest::get()
+        .uri("/admin/")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "authenticated user should access dashboard");
+}
+
+#[actix_web::test]
+async fn test_login_by_email() {
+    let app = setup_app().await;
+
+    let req = test::TestRequest::post()
+        .uri("/admin/login")
+        .set_form(&std::collections::HashMap::from([
+            ("username", "admin@test.com"),
+            ("password", "admin"),
+        ]))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 302, "login by email should redirect");
+
+    let cookie = resp.response().cookies().next().unwrap().to_owned();
+
+    let req = test::TestRequest::get()
+        .uri("/admin/")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "login by email should grant access");
 }

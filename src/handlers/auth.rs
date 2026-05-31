@@ -1,15 +1,19 @@
 use actix_session::Session;
 use actix_web::{web, HttpResponse, Responder};
 use serde::Deserialize;
+use std::sync::Arc;
 use tera::{Context, Tera};
+use crate::auth::{UserStore, verify_password};
 use crate::resource::{AdminTitle, AdminPrefix};
 
 #[derive(Clone)]
+#[deprecated(note = "use UserStore trait with a concrete implementation instead")]
 pub struct SimpleAuth {
     pub username: String,
     pub password: String,
 }
 
+#[allow(deprecated)]
 impl SimpleAuth {
     pub fn check(&self, username: &str, password: &str) -> bool {
         self.username == username && self.password == password
@@ -38,20 +42,28 @@ pub async fn login_page(tmpl: web::Data<Tera>, title: web::Data<AdminTitle>, pre
 
 pub async fn login(
     session: Session,
-    auth: web::Data<SimpleAuth>,
+    store: web::Data<Arc<dyn UserStore>>,
     form: web::Form<LoginRequest>,
     tmpl: web::Data<Tera>,
     title: web::Data<AdminTitle>,
     prefix: web::Data<AdminPrefix>,
 ) -> impl Responder {
-    if auth.check(&form.username, &form.password) {
-        // Usamos un match para evitar el panic si el store de sesión falla
-        if let Err(_) = session.insert("admin_user", &form.username) {
-            return HttpResponse::InternalServerError().body("Session error");
+    let user = if form.username.contains('@') {
+        store.find_by_email(&form.username).await
+    } else {
+        store.find_by_username(&form.username).await
+    };
+
+    match user {
+        Ok(Some(u)) if verify_password(&form.password, &u.password_hash).unwrap_or(false) => {
+            if session.insert("admin_user", &u.username).is_err() {
+                return HttpResponse::InternalServerError().body("Session error");
+            }
+            return HttpResponse::Found()
+                .insert_header(("Location", format!("/{}/", prefix.0)))
+                .finish();
         }
-        return HttpResponse::Found()
-            .insert_header(("Location", "/admin/"))
-            .finish();
+        Ok(_) | Err(_) => {}
     }
 
     let mut ctx = Context::new();
@@ -71,6 +83,6 @@ pub async fn login(
 pub async fn logout(session: Session, prefix: web::Data<AdminPrefix>) -> impl Responder {
     session.purge();
     HttpResponse::Found()
-        .insert_header(("Location", "/admin/login"))
+        .insert_header(("Location", format!("/{}/login", prefix.0)))
         .finish()
 }

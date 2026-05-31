@@ -17,8 +17,6 @@ fn get_context(
     ctx.insert("title", &title.0);
     let user = session.get::<String>("admin_user").ok().flatten().unwrap_or_else(|| "Guest".to_string());
     ctx.insert("user", &user);
-    ctx.insert("path_dashboard", "/admin/"); 
-    ctx.insert("path_logout", "/admin/logout"); 
     ctx.insert("current_slug", slug);
     ctx
 }

@@ -2,7 +2,7 @@
 
 ## Project Overview
 - **Type**: Rust library for building admin panels with Actix-web 4
-- **Entry point**: `src/lib.rs` exports `AdminSite`, `AdminRegistry`, `AdminResource`
+- **Entry point**: `src/lib.rs` exports `AdminSite`, `AdminRegistry`, `AdminResource`, `cli`
 - **Version**: 0.1.0 ready for publication
 - **Documentation**: Complete README with examples, troubleshooting guide, and advanced configuration
 - **Status**: Fully tested with real-world implementation validation
@@ -14,7 +14,8 @@
 - **Actix-web Integration**: Route configuration, middleware, session management
 - **Template Engine**: Tera templates, embedded resources, context management
 - **Testing**: Unit tests, integration tests, mock resources
-- **Documentation**: README generation, API docs, examples
+- **Authentication**: UserStore trait, JsonUserStore, Argon2 hashing
+- **CLI Tools**: Reusable `cli` module for user management binaries
 
 ### 🛠️ Common Tasks for AI Assistants
 
@@ -24,10 +25,10 @@
 // AI will implement AdminResource trait with proper validation
 ```
 
-#### **Custom Field Types**
+#### **Custom UserStore Backend**
 ```rust
-// Ask: "Add date picker and file upload field types"
-// AI will extend FormField enum and add template rendering
+// Ask: "Implement UserStore for PostgreSQL"
+// AI will create a UserStore impl using sqlx
 ```
 
 #### **Authentication Enhancement**
@@ -36,39 +37,51 @@
 // AI will implement new auth handlers and middleware
 ```
 
-#### **Database Integration**
+#### **Custom CLI Binary**
 ```rust
-// Ask: "Add PostgreSQL integration with sqlx"
-// AI will create database-backed resource implementations
+// Ask: "Create a custom CLI that uses my database"
+// AI will write a thin binary using cli::* functions + your UserStore
 ```
 
 ### 📋 Project Commands
-- `cargo build` - Build the library
-- `cargo test` - Run all tests (7 tests passing)
-- `cargo test --test test_registry` - Run specific test file
-- `cargo run --example memory` - Run the example app
-- `cargo publish --dry-run` - Validate before publishing
-- `cargo publish` - Publish to crates.io
+- `cargo build` — Build the library
+- `cargo test` — Run all tests (23+ tests passing)
+- `cargo test --test test_handlers` — Run integration tests
+- `cargo run --bin admin-cli -- <command>` — Run CLI tool
+- `cargo run --example memory` — Run the example app
+- `cargo publish --dry-run` — Validate before publishing
 
 ### 🏗️ Architecture
-- **AdminSite**: Configures the admin URL prefix and mounts routes
+- **AdminSite**: Configures the admin URL prefix, UserStore, title, and mounts routes
 - **AdminRegistry**: Holds registered resources; order matters for UI
 - **AdminResource**: Trait that resources implement to define CRUD operations
-- **Templates**: Embedded at compile time via `include_str!` in `lib.rs:15-24`
+- **UserStore**: Trait for authentication backend (JsonUserStore included)
+- **cli module**: Public async functions for user management (create, delete, list)
+- **Templates**: Embedded at compile time via `include_str!` in `lib.rs`
 
 ### 🔧 Key Patterns
-- Resources must implement `AdminResource` trait (async)
+- Resources implement `AdminResource` trait (async)
+- Authentication uses `UserStore` trait (not `SimpleAuth` which is deprecated)
 - Slugs must be unique (panics on duplicate)
-- Routes: `/{prefix}/{slug}`, `/{prefix}/{slug}/new`, `/{prefix}/{slug}/{id}`, `/{prefix}/{slug}/{id}/delete`
-- JSON serialization for template context to avoid Tera serialization issues
-- Actix-web routing philosophy: explicit slash handling, absolute URLs for redirects
+- Routes: `/{prefix}/`, `/{prefix}/login`, `/{prefix}/logout`, `/{prefix}/{slug}/`, etc.
+- AdminPrefix stored without leading slash (e.g. `"admin"` not `"/admin"`) to avoid double-slash
+- CLI functions are `async` — must be called from within a Tokio runtime
 - Template variables: always provide defaults using `| default(value='')`
 
 ### 🧪 Testing Strategy
 - Tests use mock resources implementing `AdminResource`
-- Tests located in `tests/test_*.rs`
-- 7 tests total: 2 handlers, 3 registry, 2 resource tests
+- Tests located in `tests/test_*.rs` and inside `src/` modules
+- 23 tests total: 13 unit (auth/store, middleware, json_store), 4 handler integration, 3 registry, 2 resource, 1 doc-test
 - All tests passing in release mode
+
+### 📦 Published Modules
+- `pub mod auth` — UserStore trait, JsonUserStore, middleware, password hashing
+- `pub mod cli` — Reusable CLI functions (async)
+- `pub mod resource` — AdminResource trait, types
+- `pub mod registry` — AdminRegistry
+- `pub mod site` — AdminSite
+- `pub mod handlers` — Route handlers (login, logout, dashboard, CRUD)
+- `pub mod types` — Shared types (Column, FormField, ListQuery, etc.)
 
 ### 🚀 AI-Enhanced Development Workflow
 
@@ -96,12 +109,15 @@
 
 ### 🔍 Debugging Assistance
 - **Template errors**: Check Tera syntax and context variables, use default values
-- **Route errors**: Verify AdminSite configuration and slug uniqueness, check slash handling
-- **Async errors**: Ensure proper .await usage and error propagation
+- **Route errors**: Verify AdminSite configuration and slug uniqueness
+- **CLI runtime errors**: Ensure async CLI functions are called with `.await` inside a Tokio runtime
+- **Double-slash URLs**: AdminPrefix stored without leading slash now; rebuild if still seeing `//admin/...`
 - **Build errors**: Check trait implementations and dependency versions
 - **Common issues**: See `docs/troubleshooting.md` for comprehensive solutions to:
+  - Cannot start runtime from within runtime (CLI async functions)
   - Actix-web routing with/without trailing slashes
   - Double slash URLs in redirects
   - Tera filter limitations (range, arithmetic)
   - AdminRegistry Clone requirements
   - FormField parameter requirements
+  - User already exists on re-run
