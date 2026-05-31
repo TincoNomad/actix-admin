@@ -246,6 +246,83 @@ The prefix is stored without a leading slash to avoid double-slash issues (e.g. 
 cargo test    # 23+ tests covering auth, middleware, handlers, CLI, resources
 ```
 
+## Security Best Practices
+
+This library provides secure defaults (Argon2 hashing, session management, HTML escaping), but the following should be configured in your deployment:
+
+### CSRF Protection
+
+Admin CRUD operations modify state via POST requests. Add a CSRF middleware to prevent cross-site request forgery:
+
+```toml
+actix-csrf = "0.3"
+```
+
+```rust
+// Wrap your App with CSRF protection
+use actix_csrf::Csrf;
+use actix_csrf::storage::CookieStore;
+
+App::new()
+    .wrap(Csrf::new(CookieStore::default()))
+    // ...
+```
+
+### Secure Cookies
+
+Configure session cookies for production:
+
+```rust
+SessionMiddleware::builder(CookieSessionStore::default(), actix_web::cookie::Key::generate())
+    .cookie_secure(true)       // HTTPS only
+    .cookie_http_only(true)    // Not accessible via JavaScript
+    .cookie_same_site(actix_web::cookie::SameSite::Lax)  // CSRF mitigation
+    .build()
+```
+
+### Rate Limiting
+
+Prevent brute force attacks on the login endpoint:
+
+```toml
+actix-governor = "0.6"
+```
+
+```rust
+use actix_governor::{Governor, GovernorConfigBuilder};
+
+let governor_conf = GovernorConfigBuilder::default()
+    .per_second(5)
+    .burst_size(10)
+    .finish()
+    .unwrap();
+
+App::new()
+    .wrap(Governor::new(&governor_conf))
+    // ...
+```
+
+### HTTPS
+
+Always use HTTPS in production:
+
+```rust
+HttpServer::new(move || { /* ... */ })
+    .bind_openssl("0.0.0.0:443", ssl_builder)?
+    .run().await
+```
+
+Or terminate TLS at a reverse proxy (nginx, Caddy, etc.).
+
+### Resource IDs
+
+The default `generate_id()` produces sequential IDs. Use UUIDs or ULIDs if enumeration is a concern for your application.
+
+```rust
+// In your AdminResource implementation:
+let id = uuid::Uuid::new_v4().to_string();
+```
+
 ## License
 
 AGPL-3.0 — See [LICENSE](LICENSE) for details.

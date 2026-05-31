@@ -269,7 +269,40 @@ impl AdminResource for CachedResource {
 
 ## Security
 
+### CSRF Protection
+
+Admin CRUD operations modify state via POST requests. Add a CSRF middleware to prevent cross-site request forgery:
+
+```toml
+actix-csrf = "0.3"
+```
+
+```rust
+use actix_csrf::Csrf;
+use actix_csrf::storage::CookieStore;
+
+App::new()
+    .wrap(Csrf::new(CookieStore::default()))
+    .configure(|cfg| {
+        AdminSite::new("/admin").mount(cfg, registry)
+    })
+```
+
+### Secure Cookies
+
+Configure session cookies for production to prevent XSS and CSRF attacks:
+
+```rust
+SessionMiddleware::builder(CookieSessionStore::default(), actix_web::cookie::Key::generate())
+    .cookie_secure(true)           // HTTPS only
+    .cookie_http_only(true)        // Not accessible via JavaScript
+    .cookie_same_site(actix_web::cookie::SameSite::Lax)  // CSRF mitigation
+    .build()
+```
+
 ### HTTPS
+
+Always use HTTPS in production — either directly or via a reverse proxy (nginx, Caddy):
 
 ```rust
 HttpServer::new(move || { /* ... */ })
@@ -277,30 +310,47 @@ HttpServer::new(move || { /* ... */ })
     .run().await
 ```
 
-### Session Security
-
-```rust
-SessionMiddleware::builder(CookieSessionStore::default(), actix_web::cookie::Key::generate())
-    .cookie_secure(true)
-    .cookie_http_only(true)
-    .build()
-```
-
 ### Rate Limiting
+
+Prevent brute force attacks on the login endpoint:
+
+```toml
+actix-governor = "0.6"
+```
 
 ```rust
 use actix_governor::{Governor, GovernorConfigBuilder};
 
-let governor_conf = GovernorConfigBuilder::default().per_second(10).burst_size(2).finish().unwrap();
+let governor_conf = GovernorConfigBuilder::default()
+    .per_second(5)
+    .burst_size(10)
+    .finish()
+    .unwrap();
 
 HttpServer::new(move || {
     App::new()
         .wrap(Governor::new(&governor_conf))
-        // ...
+        .configure(|cfg| {
+            AdminSite::new("/admin").mount(cfg, registry)
+        })
 })
 ```
 
+### Resource IDs
+
+The default `generate_id()` produces sequential IDs (timestamp + atomic counter). Use UUIDs or ULIDs if ID enumeration is a concern:
+
+```rust
+// In your AdminResource implementation:
+async fn create(&self, data: HashMap<String, serde_json::Value>) -> Result<serde_json::Value, AdminError> {
+    let id = uuid::Uuid::new_v4().to_string();
+    // ...
+}
+```
+
 ### Input Validation
+
+Validate data in your `AdminResource` implementations:
 
 ```rust
 impl AdminResource for ProductAdmin {

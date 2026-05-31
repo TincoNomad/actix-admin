@@ -138,6 +138,7 @@ Visit `http://localhost:8080/admin` and login.
 ## Next Steps
 
 - [Advanced Configuration](advanced.md)
+- [Security Best Practices](advanced.md#security)
 - [Troubleshooting Guide](troubleshooting.md)
 - [Custom Field Types](custom-fields.md)
 - [Database Integration](database.md)
